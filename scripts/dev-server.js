@@ -24,10 +24,10 @@ const ROUTES = [
   { pattern: /^\/api\/health\/?$/, module: 'api/health.js' },
   { pattern: /^\/api\/cron\/keepalive\/?$/, module: 'api/cron/keepalive.js' },
   {
-    // /assignments/:path* and its /api/ equivalent land on the catch-all.
-    pattern: /^\/(?:api\/)?assignments\/(.*)$/,
-    module: 'api/assignments/[...path].js',
-    query: match => ({ path: match[1].split('/').filter(Boolean) })
+    // Mirrors the rewrite in vercel.json, which hands the tail over as ?path=a/b.
+    pattern: /^\/(?:api\/)?assignments(?:\/(.*))?$/,
+    module: 'api/assignments.js',
+    query: match => ({ path: match[1] || '' })
   }
 ];
 

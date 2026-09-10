@@ -1,12 +1,13 @@
 // All assignment endpoints, kept on the same URL shape as v2 so the
-// Brightspace component only needs a new host:
+// Brightspace component only needs a new host. vercel.json rewrites
+// /assignments/... onto this one function; see resolveSegments below.
 //
 //   GET  /assignments/:assignmentId
 //   GET  /assignments/:assignmentId/submissions/:userId
 //   POST /assignments/:assignmentId/submissions
 
-const { applyCors } = require('../../lib/cors');
-const assignmentService = require('../../lib/services/assignmentService');
+const { applyCors } = require('../lib/cors');
+const assignmentService = require('../lib/services/assignmentService');
 
 module.exports = async function handler(req, res) {
   if (applyCors(req, res)) return;
@@ -76,20 +77,32 @@ module.exports = async function handler(req, res) {
 /**
  * The path segments after /assignments/.
  *
- * Vercel fills req.query.path for a [...path] route, but that did not survive
- * the rewrite in vercel.json on a real deploy - every request arrived without
- * it and came back as "Invalid assignment id". The URL is always there, so read
- * the segments from it and treat req.query.path as the shortcut it is.
+ * This used to live in api/assignments/[...path].js and lean on Vercel filling
+ * req.query.path. On a real deploy that catch-all only ever matched a single
+ * segment: /assignments/:id answered, while /assignments/:id/submissions got a
+ * platform 404 and never reached this function. So the route is spelled out in
+ * vercel.json instead, which hands the segments over as ?path=a/b/c.
+ *
+ * Three shapes therefore have to work: that query string, an array (what a
+ * catch-all would give), and the plain URL (the local dev server, and any
+ * direct /api/assignments/... call).
  */
 function resolveSegments(req) {
-  // A trailing slash yields an empty final segment, hence the filter.
-  const fromQuery = [].concat((req.query && req.query.path) || []).filter(Boolean);
+  const raw = (req.query && req.query.path) || [];
+
+  const fromQuery = []
+    .concat(raw)
+    // ?path=20105/submissions arrives as one string holding the whole tail.
+    .flatMap(part => String(part).split('/'))
+    // A trailing slash yields an empty final segment.
+    .filter(Boolean);
+
   if (fromQuery.length > 0) return fromQuery;
 
   const pathname = new URL(req.url || '', 'http://localhost').pathname;
-  const match = pathname.match(/^\/(?:api\/)?assignments\/(.*)$/);
+  const match = pathname.match(/^\/(?:api\/)?assignments(?:\/(.*))?$/);
 
-  return match ? match[1].split('/').filter(Boolean) : [];
+  return match && match[1] ? match[1].split('/').filter(Boolean) : [];
 }
 
 function parseBody(body) {
