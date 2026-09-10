@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 #
-# Check a deployed instance end to end.
+# Check an instance end to end, deployed or local.
 #
-#   ./scripts/smoke-test.sh https://your-app.vercel.app 21601
+#   ./scripts/smoke-test.sh https://your-app.vercel.app 20105
+#   ./scripts/smoke-test.sh http://localhost:3000 20105    # with npm run dev:local
 #
 # Submits a deliberately wrong query, so it leaves one throwaway submission
 # behind for the test user "smoke-test-user".

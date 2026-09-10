@@ -11,8 +11,7 @@ const assignmentService = require('../../lib/services/assignmentService');
 module.exports = async function handler(req, res) {
   if (applyCors(req, res)) return;
 
-  // A trailing slash yields an empty final segment.
-  const segments = [].concat(req.query.path || []).filter(Boolean);
+  const segments = resolveSegments(req);
   const assignmentId = parseInt(segments[0], 10);
 
   if (Number.isNaN(assignmentId)) {
@@ -73,6 +72,25 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ error: 'Internal server error' });
   }
 };
+
+/**
+ * The path segments after /assignments/.
+ *
+ * Vercel fills req.query.path for a [...path] route, but that did not survive
+ * the rewrite in vercel.json on a real deploy - every request arrived without
+ * it and came back as "Invalid assignment id". The URL is always there, so read
+ * the segments from it and treat req.query.path as the shortcut it is.
+ */
+function resolveSegments(req) {
+  // A trailing slash yields an empty final segment, hence the filter.
+  const fromQuery = [].concat((req.query && req.query.path) || []).filter(Boolean);
+  if (fromQuery.length > 0) return fromQuery;
+
+  const pathname = new URL(req.url || '', 'http://localhost').pathname;
+  const match = pathname.match(/^\/(?:api\/)?assignments\/(.*)$/);
+
+  return match ? match[1].split('/').filter(Boolean) : [];
+}
 
 function parseBody(body) {
   if (!body) return {};

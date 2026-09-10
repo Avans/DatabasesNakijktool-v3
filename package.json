@@ -5,6 +5,7 @@
   "private": true,
   "scripts": {
     "dev": "vercel dev",
+    "dev:local": "node scripts/dev-server.js",
     "load-database": "./scripts/load-database.sh",
     "verify-assignments": "node scripts/verify-assignments.js",
     "test": "node test/verification.test.js"

@@ -5,12 +5,18 @@
 -- means a student can never read or change the assignments and submissions,
 -- whatever they submit.
 --
--- Replace CHANGE_ME with the password you put in STUDENT_DB_PASSWORD, then run
--- this file once. On Aiven the `avnadmin` account may create users; if it is
--- refused, create the user in the Aiven console (Users tab) and run only the
--- GRANT statements below.
+-- The password is filled in from STUDENT_DB_PASSWORD in .env when this file is
+-- run through scripts/run-sql.sh, so it is never stored here:
+--
+--   ./scripts/run-sql.sh sql/02-student-user.sql
+--
+-- On Aiven the `avnadmin` account may create users; if it is refused, create the
+-- user in the Aiven console (Users tab) and run only the GRANT statements below.
 
-CREATE USER IF NOT EXISTS 'nakijk_student'@'%' IDENTIFIED BY 'CHANGE_ME';
+CREATE USER IF NOT EXISTS 'nakijk_student'@'%' IDENTIFIED BY '${STUDENT_DB_PASSWORD}';
+-- CREATE USER IF NOT EXISTS leaves an existing account untouched, so set the
+-- password explicitly: re-running this file then also rotates it.
+ALTER USER 'nakijk_student'@'%' IDENTIFIED BY '${STUDENT_DB_PASSWORD}';
 
 GRANT SELECT ON `fun4all`.*             TO 'nakijk_student'@'%';
 GRANT SELECT ON `muziekscholen`.*       TO 'nakijk_student'@'%';

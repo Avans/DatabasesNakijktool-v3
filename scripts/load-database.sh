@@ -2,21 +2,44 @@
 #
 # Load the v2 dumps into the Aiven MySQL service.
 #
-# Reads the connection details from v3/.env. Run once when setting up, and again
+# Reads the connection details from .env. Run once when setting up, and again
 # whenever you want to reset the practice databases to their original state.
+# Safe to re-run: it is idempotent.
 #
-#   cd v3 && ./scripts/load-database.sh
+#   ./scripts/load-database.sh
+#
+# The dumps come from the v2 project's sqlinit/. It is found automatically when
+# that project is the parent directory or a sibling checkout; otherwise set
+# SQLINIT_DIR in .env.
 #
 # Requires the `mysql` client:
-#   macOS:   brew install mysql-client
+#   macOS:   brew install mysql-client   (keg-only, so add it to PATH)
 #   Ubuntu:  sudo apt install mysql-client
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 V3_DIR="$(dirname "$SCRIPT_DIR")"
-DUMP_DIR="$(dirname "$V3_DIR")/sqlinit"
 SQL_DIR="$V3_DIR/sql"
+
+# The v2 dumps live in the v2 project's sqlinit/. That project may sit anywhere:
+# as the parent directory (v3 as a subfolder), or as a sibling checkout. Set
+# SQLINIT_DIR in .env or the environment to point at it directly.
+find_dump_dir() {
+  local candidate
+  for candidate in \
+    "${SQLINIT_DIR:-}" \
+    "$V3_DIR/sqlinit" \
+    "$(dirname "$V3_DIR")/sqlinit" \
+    "$(dirname "$V3_DIR")/DatabasesNakijktool-v2/sqlinit"
+  do
+    if [ -n "$candidate" ] && [ -f "$candidate/001_databases_create.sql" ]; then
+      echo "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
 
 if [ -f "$V3_DIR/.env" ]; then
   set -a
@@ -34,6 +57,19 @@ for var in DB_HOST DB_PORT DB_USER DB_PASSWORD; do
     exit 1
   fi
 done
+
+if ! DUMP_DIR="$(find_dump_dir)"; then
+  echo "ERROR: could not find the v2 sqlinit/ directory with the SQL dumps." >&2
+  echo "       Looked in:" >&2
+  echo "         \$SQLINIT_DIR (${SQLINIT_DIR:-unset})" >&2
+  echo "         $V3_DIR/sqlinit" >&2
+  echo "         $(dirname "$V3_DIR")/sqlinit" >&2
+  echo "         $(dirname "$V3_DIR")/DatabasesNakijktool-v2/sqlinit" >&2
+  echo "       Set SQLINIT_DIR in .env to the correct path, for example:" >&2
+  echo "         SQLINIT_DIR=$(dirname "$V3_DIR")/DatabasesNakijktool-v2/sqlinit" >&2
+  exit 1
+fi
+echo "Using dumps from: $DUMP_DIR"
 
 if ! command -v mysql >/dev/null 2>&1; then
   echo "ERROR: the 'mysql' client is not installed or not on PATH." >&2
@@ -109,14 +145,27 @@ echo "Creating databases..."
 # Aiven's avnadmin can normally create databases. If this is refused, create the
 # eight databases listed below in the Aiven console (Databases tab) and re-run.
 if ! run_mysql < "$DUMP_DIR/001_databases_create.sql" 2>/dev/null; then
-  echo "  WARNING: CREATE DATABASE was refused." >&2
-  echo "  Create these databases in the Aiven console, then run this script again:" >&2
-  echo "    databaas fun4all muziekscholen outerspace studentactiviteiten" >&2
-  echo "    muziekstukken ruimtereis employees" >&2
-  exit 1
+  # The databases may already exist (created by hand in the Aiven console). Only
+  # treat this as fatal when they are actually missing.
+  missing=""
+  for db in databaas fun4all muziekscholen outerspace studentactiviteiten muziekstukken ruimtereis employees; do
+    if ! run_mysql -N -B -e "USE \`$db\`" >/dev/null 2>&1; then
+      missing="$missing $db"
+    fi
+  done
+  if [ -z "$missing" ]; then
+    echo "  ok (databases already existed)"
+    echo
+  else
+    echo "  WARNING: CREATE DATABASE was refused." >&2
+    echo "  Create these databases in the Aiven console, then run this script again:" >&2
+    echo "   $missing" >&2
+    exit 1
+  fi
+else
+  echo "  ok"
+  echo
 fi
-echo "  ok"
-echo
 
 # Order matters: tables referenced by a foreign key are loaded first.
 echo "Loading the databaas schema (assignments, regexes, bookkeeping)..."
@@ -126,11 +175,15 @@ load_dump "$DUMP_DIR/009_databaas_submission_status.sql"
 load_dump "$DUMP_DIR/002_databaas_assignments.sql"
 load_dump "$DUMP_DIR/005_databaas_regexes.sql"
 load_dump "$DUMP_DIR/007_databaas_studentnrs.sql"
-load_dump "$DUMP_DIR/010_databaas_routines.sql"
 
 echo
 echo "Creating an empty submissions table..."
+# Must come before the routines: resultaten_view selects from submissions.
 load_dump "$SQL_DIR/01-submissions-schema.sql"
+
+echo
+echo "Loading the databaas routines and views..."
+load_dump "$DUMP_DIR/010_databaas_routines.sql"
 
 echo
 echo "Loading the practice databases..."
@@ -142,6 +195,10 @@ for schema in fun4all muziekscholen outerspace studentactiviteiten muziekstukken
     load_dump "$file"
   done
 done
+
+echo
+echo "Correcting the v2 reference queries for a case-sensitive server..."
+load_dump "$SQL_DIR/03-assignment-query-fixes.sql"
 
 echo
 echo "Verifying..."
