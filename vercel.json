@@ -1,0 +1,15 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    { "source": "/assignments/:path*", "destination": "/api/assignments/:path*" }
+  ],
+  "crons": [
+    { "path": "/api/cron/keepalive", "schedule": "59 11 * * *" },
+    { "path": "/api/cron/keepalive", "schedule": "59 23 * * *" }
+  ],
+  "functions": {
+    "api/**/*.js": {
+      "maxDuration": 30
+    }
+  }
+}

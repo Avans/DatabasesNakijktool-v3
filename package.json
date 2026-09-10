@@ -1,0 +1,20 @@
+{
+  "name": "databases-nakijktool-v3",
+  "version": "3.0.0",
+  "description": "Nakijktool voor SQL-opdrachten: Vercel serverless API op een Aiven MySQL database",
+  "private": true,
+  "scripts": {
+    "dev": "vercel dev",
+    "load-database": "./scripts/load-database.sh",
+    "verify-assignments": "node scripts/verify-assignments.js",
+    "test": "node test/verification.test.js"
+  },
+  "dependencies": {
+    "mysql2": "^3.11.0"
+  },
+  "devDependencies": {
+    "vercel": "^37.0.0"
+  },
+  "author": "",
+  "license": "ISC"
+}
