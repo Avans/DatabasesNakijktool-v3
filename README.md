@@ -251,6 +251,12 @@ npx vercel env add DB_SSL_CA production       # plak het daar
 
 `SQLINIT_DIR` hoeft niet mee: dat gebruikt alleen het laadscript op je laptop.
 
+> `vercel.json` schrijft `/assignments/...` om naar één functie
+> (`api/assignments.js`) en geeft het staartstuk mee als `?path=`. Een bestandsnaam
+> als `api/assignments/[...path].js` leek hetzelfde te doen, maar matchte op de
+> deploy maar één segment: `/assignments/:id` werkte, `/assignments/:id/submissions`
+> gaf een 404 van Vercel zelf en bereikte de functie nooit.
+
 Controleer daarna wat er staat:
 
 ```bash
@@ -356,8 +362,9 @@ Zet daarna `CORS_ORIGIN` in Vercel op je Brightspace-domein in plaats van `*`.
 | `could not find the v2 sqlinit/ directory` | v2-checkout staat ergens anders | `SQLINIT_DIR` in `.env` |
 | `CREATE DATABASE was refused` | Aiven laat het niet toe via SQL | databases aanmaken in de console (stap 2) |
 | `Missing database configuration: DB_PORT` | variabele niet gezet in Vercel | `npx vercel env add DB_PORT production`, dan opnieuw deployen |
-| `{"error":"Invalid assignment id"}` | opdrachtnummer kwam niet aan bij de functie | opgelost in `api/assignments/[...path].js`; opnieuw deployen |
-| `{"database":"unreachable","error":"ECONNREFUSED"}` | verkeerde of ontbrekende `DB_HOST`/`DB_PORT` | waarden vergelijken met de Aiven-console |
+| `{"error":"Invalid assignment id"}` | opdrachtnummer kwam niet aan bij de functie | opgelost via de rewrite in `vercel.json`; opnieuw deployen |
+| `{"database":"unreachable","error":"ECONNREFUSED"}` | omgevingsvariabelen niet gezet, of pas na de laatste deploy | zetten in Vercel en **opnieuw deployen** |
+| `NOT_FOUND` op `POST /assignments/:id/submissions` | route met meerdere segmenten kwam niet bij de functie | opgelost via de rewrite in `vercel.json`; opnieuw deployen |
 | `Unknown column 'KLS'` | `ANSI_QUOTES` staat aan | zie [Twee verschillen](#twee-verschillen-met-de-v2-server) |
 | `Table '...Componist' doesn't exist` | hoofdlettergevoelige tabelnamen | tabelnaam in kleine letters schrijven |
 
@@ -451,7 +458,7 @@ aan het eind van het laden.
 ```
 DatabasesNakijktool-v3/
 ├── api/
-│   ├── assignments/[...path].js   alle drie de endpoints
+│   ├── assignments.js             alle drie de endpoints
 │   ├── cron/keepalive.js          houdt Aiven wakker (2x per dag)
 │   └── health.js                  statuscheck
 ├── lib/
