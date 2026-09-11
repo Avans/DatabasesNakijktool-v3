@@ -364,6 +364,7 @@ Zet daarna `CORS_ORIGIN` in Vercel op je Brightspace-domein in plaats van `*`.
 | `Missing database configuration: DB_PORT` | variabele niet gezet in Vercel | `npx vercel env add DB_PORT production`, dan opnieuw deployen |
 | `{"error":"Invalid assignment id"}` | opdrachtnummer kwam niet aan bij de functie | opgelost via de rewrite in `vercel.json`; opnieuw deployen |
 | `{"database":"unreachable","error":"ECONNREFUSED"}` | omgevingsvariabelen niet gezet, of pas na de laatste deploy | zetten in Vercel en **opnieuw deployen** |
+| `{"database":"unreachable","error":"ENOTFOUND"}` | Aiven-service staat uit, DNS-naam is weg | [aanzetten in de console](#de-database-staat-uit--en-nu) |
 | `NOT_FOUND` op `POST /assignments/:id/submissions` | route met meerdere segmenten kwam niet bij de functie | opgelost via de rewrite in `vercel.json`; opnieuw deployen |
 | `Unknown column 'KLS'` | `ANSI_QUOTES` staat aan | zie [Twee verschillen](#twee-verschillen-met-de-v2-server) |
 | `Table '...Componist' doesn't exist` | hoofdlettergevoelige tabelnamen | tabelnaam in kleine letters schrijven |
@@ -396,8 +397,40 @@ curl -H "Authorization: Bearer $CRON_SECRET" https://db-nakijk.vercel.app/api/cr
 
 Zonder de juiste `Authorization`-header antwoordt het endpoint met `401`.
 
-Wil je extra zekerheid, zet dan gratis een monitor bij [UptimeRobot](https://uptimerobot.com)
-op `https://db-nakijk.vercel.app/api/health`, elk uur. Dat is meteen een storingsmelder.
+### Zet er een externe monitor naast
+
+Twee cronjobs per dag zijn dun, om drie redenen:
+
+- Op het **Hobby-plan** mag je twee cronjobs hebben die elk hooguit één keer per dag
+  draaien, en Vercel kiest zelf het precieze moment binnen dat uur. Vaker kan niet.
+- Een cronjob die faalt — verkeerde omgevingsvariabelen, een deploy die stuk is —
+  legt de database stil zonder dat je het merkt.
+- Vercel registreert cronjobs pas bij een **productie**-deploy. Tussen "project
+  aangemaakt" en "eerste werkende deploy" telt Aiven dus nul activiteit.
+
+Zet daarom gratis een monitor bij [UptimeRobot](https://uptimerobot.com) op:
+
+```
+https://db-nakijk.vercel.app/api/health
+```
+
+Dat endpoint doet een echte `SELECT` op de database, dus elke controle telt als
+activiteit. Op elk uur is dat 24 contactmomenten per dag in plaats van 2, en je
+krijgt meteen een mail als de API eruit ligt.
+
+### De database staat uit — en nu?
+
+Een uitgezette Aiven-service komt **niet** vanzelf terug: de cronjob kan hem niet
+wakker maken, want de DNS-naam is dan weg (`ENOTFOUND`). Zet hem met de hand aan in
+de Aiven-console (**Service → Power on**) en wacht tot de status **Running** is.
+
+Opnieuw deployen hoeft niet. De pools in `lib/db.js` gooien een kapotte verbinding
+weg en proberen het opnieuw, dus de API herstelt binnen een paar verzoeken vanzelf.
+Controleer met:
+
+```bash
+curl https://db-nakijk.vercel.app/api/health
+```
 
 ## Handige commando's
 
